@@ -86,7 +86,7 @@ class RealNetworkSync(gym.Env):
         self.last_stimulus  = -1
         return self.state,{}
 
-    def step(self,action):
+    def step(self,action,ctr=0):
         """
         Apply action and return new state, reward, termination info, and extra info. This process is not time sensitive (i.e. waits for user).
         """
@@ -109,14 +109,47 @@ class RealNetworkSync(gym.Env):
             # Handle the timeout scenario
             print("Timeout occured, reconnect ... (If this persists, check authentication. Then ask your mentor, if problem occurs for more than 10 min.)")
 
-            self.context                      = zmq.Context()
-            self.dealer_socket                = self.context.socket(zmq.DEALER)
-            self.dealer_socket.plain_username = self.username.encode()
-            self.dealer_socket.plain_password = self.password.encode()
-            self.dealer_socket.connect("tcp://127.0.0.1:5335")
-            
-            return(self.step(action))
+            if ctr < 30:
+                return(self.step(action,ctr=ctr+1))
+            else:
+                print("server is dead")
+                # Server is dead!
+                response = np.zeros([0,2])
+                
+                state  = self.state_object.get_state(response)
+                reward = self.reward_object.reward(response)
+                
+                terminated = True
+                truncated  = False
 
+                msg        = "Server is dead. Recreate the environment!"
+        
+                # Extra information to get information for the user
+                info = {"spikes":     [], 
+                        "elecs":      [], 
+                        "action":     np.zeros(5,dtype=int),
+                        "missed_cyc": 0, 
+                        "stim_id":    0, 
+                        "simulated":  False,
+                        "comment":    msg}
+        
+                try:
+                        self.dealer_socket.disconnect(f"tcp://{self.host}:{self.port}")
+                except:
+                        print("Port is gone")
+
+                self.dealer_socket.setsockopt(zmq.LINGER, 0)
+                self.dealer_socket.close()
+
+                self.context.term()
+                self.context                      = zmq.Context()
+                self.dealer_socket                = self.context.socket(zmq.DEALER)
+                self.dealer_socket.plain_username = self.username.encode()
+                self.dealer_socket.plain_password = self.password.encode()
+                self.dealer_socket.connect(f"tcp://{self.host}:{self.port}")
+        
+                return state,reward,terminated,truncated,info
+        
         action   = response["action"]
         if msg == 'none':
             msg  = response["message"] # Only look at message, if the action passed intial test. Otherwise, tell user why it failed
