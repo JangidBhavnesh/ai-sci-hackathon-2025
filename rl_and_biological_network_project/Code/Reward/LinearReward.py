@@ -19,7 +19,7 @@ class LinearReward:
         This function is being called when a response is transformed into a reward. Do not rename.
         """
         r = 0
-        for i in range(2,response.shape[0]):
+        for i in range(1,response.shape[0]):
             if response[i,0] - response[i-1,0] > 5:
                 continue
             if (response[i,1] - response[i-1,1]) % 4 == 1:
